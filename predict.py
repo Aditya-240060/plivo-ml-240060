@@ -6,8 +6,8 @@ Extracts advanced prosodic features (pitch slope, energy variance, intensity dro
 speaking rate proxies, ZCR variance, MFCCs) strictly from the last 1.5s of speech
 immediately preceding pause_start (STRICT CAUSALITY RULE).
 
-Trains a lightweight scikit-learn classifier (RandomForestClassifier) and outputs
-predictions.csv with columns: turn_id, pause_index, p_eot.
+Trains a lightweight scikit-learn classifier (RandomForestClassifier) using out-of-fold
+cross validation to prevent data leakage and outputs predictions.csv.
 """
 import argparse
 import csv
@@ -18,6 +18,7 @@ import numpy as np
 import soundfile as sf
 import librosa
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import StratifiedKFold
 
 # Ensure current directory and starter/ directory are in python path
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -29,7 +30,7 @@ if script_dir not in sys.path:
 
 try:
     from features import load_wav, speech_before, frame_energy_db, f0_contour, frames
-except ImportError:
+except ModuleNotFoundError:
     def load_wav(path):
         x, sr = sf.read(path, dtype="float32", always_2d=False)
         if x.ndim > 1:
@@ -77,6 +78,9 @@ except ImportError:
         return np.array([autocorr_f0(f, sr) for f in fr], dtype=np.float32)
 
 
+NUM_FEATURES = 55
+
+
 def extract_prosodic_features(x, sr, pause_start):
     """Extract advanced prosodic features strictly preceding pause_start (max 1.5s window).
     
@@ -84,13 +88,12 @@ def extract_prosodic_features(x, sr, pause_start):
     """
     seg = speech_before(x, sr, pause_start, window_s=1.5)
     
-    num_features = 58
     if len(seg) < sr // 10:
-        return np.zeros(num_features, dtype=np.float32)
+        return np.zeros(NUM_FEATURES, dtype=np.float32)
     
     seg_len = float(len(seg) / sr)
 
-    # 1. Energy & Intensity features (including variance and drop-offs)
+    # 1. Energy & Intensity features (13 elements)
     e = frame_energy_db(seg, sr)
     if len(e) > 0:
         e_mean = float(np.mean(e))
@@ -103,20 +106,18 @@ def extract_prosodic_features(x, sr, pause_start):
         e_tail_3 = float(np.mean(e[-3:])) if len(e) >= 3 else e_mean
         e_tail_5 = float(np.mean(e[-5:])) if len(e) >= 5 else e_mean
         
-        # Linear slope of energy across the window
         e_slope = float((e[-1] - e[0]) / max(len(e), 1))
         
-        # Intensity drop-off: early window vs late window
         half_idx = max(1, len(e) // 2)
         e_early = float(np.mean(e[:half_idx]))
         e_late = float(np.mean(e[half_idx:]))
-        intensity_dropoff = e_early - e_late  # positive if energy dropped off towards pause
+        intensity_dropoff = e_early - e_late
         e_peak_to_final_diff = e_max - e[-1]
     else:
         e_mean = e_var = e_std = e_min = e_max = e_range = e_iqr = 0.0
         e_tail_3 = e_tail_5 = e_slope = intensity_dropoff = e_peak_to_final_diff = 0.0
 
-    # 2. Pitch (F0) features (including slope & trailing trend)
+    # 2. Pitch (F0) features (11 elements)
     f0 = f0_contour(seg, sr)
     voiced = f0[f0 > 0]
     voiced_ratio = float(len(voiced) / max(len(f0), 1))
@@ -130,7 +131,6 @@ def extract_prosodic_features(x, sr, pause_start):
         f0_tail_3 = float(np.mean(voiced[-3:])) if len(voiced) >= 3 else f0_mean
         f0_relative_tail = float(f0_tail_3 / (f0_mean + 1e-6))
 
-        # Pitch slope calculation (linear regression slope)
         if len(voiced) >= 2:
             t = np.arange(len(voiced))
             f0_slope = float(np.polyfit(t, voiced, 1)[0])
@@ -147,7 +147,7 @@ def extract_prosodic_features(x, sr, pause_start):
         f0_mean = f0_std = f0_min = f0_max = f0_range = f0_tail_3 = 0.0
         f0_relative_tail = f0_slope = pitch_trailing_diff = f0_tail_slope = 0.0
 
-    # 3. Zero-Crossing Rate & Speaking Rate Proxies
+    # 3. Zero-Crossing Rate & Speaking Rate Proxies (5 elements)
     fr = frames(seg, sr)
     if len(fr) > 0:
         zcr_frame = np.mean(np.abs(np.diff(np.sign(fr), axis=1)), axis=1) / 2.0
@@ -158,14 +158,13 @@ def extract_prosodic_features(x, sr, pause_start):
     else:
         zcr_mean = zcr_var = zcr_std = zcr_tail_3 = 0.0
 
-    # Speaking rate proxy: local energy peaks count per second
     if len(e) > 2:
         peaks = np.where((e[1:-1] > e[:-2]) & (e[1:-1] > e[2:]) & (e[1:-1] > e_mean))[0]
         speaking_rate_proxy = float(len(peaks) / max(seg_len, 0.1))
     else:
         speaking_rate_proxy = 0.0
 
-    # 4. MFCC features
+    # 4. MFCC features (26 elements: 13 mean + 13 std)
     try:
         mfcc = librosa.feature.mfcc(
             y=seg, sr=sr, n_mfcc=13,
@@ -173,11 +172,9 @@ def extract_prosodic_features(x, sr, pause_start):
         )
         mfcc_mean = np.mean(mfcc, axis=1)
         mfcc_std = np.std(mfcc, axis=1)
-        mfcc_tail = np.mean(mfcc[:, -3:], axis=1) if mfcc.shape[1] >= 3 else mfcc_mean
     except Exception:
         mfcc_mean = np.zeros(13)
         mfcc_std = np.zeros(13)
-        mfcc_tail = np.zeros(13)
 
     feats = np.concatenate([
         [seg_len, e_mean, e_var, e_std, e_min, e_max, e_range, e_iqr, e_tail_3, e_tail_5, e_slope, intensity_dropoff, e_peak_to_final_diff],
@@ -186,6 +183,9 @@ def extract_prosodic_features(x, sr, pause_start):
         mfcc_mean,
         mfcc_std,
     ]).astype(np.float32)
+
+    # Sanitize NaN/Inf values to prevent classifier corruption
+    feats = np.nan_to_num(feats, nan=0.0, posinf=0.0, neginf=0.0)
 
     return feats
 
@@ -198,9 +198,10 @@ def main():
 
     labels_file = os.path.join(args.data_dir, "labels.csv")
     if not os.path.exists(labels_file):
-        raise FileNotFoundError(f"labels.csv not found in {args.data_dir}")
+        raise FileNotFoundError(f"labels.csv not found in data_dir: {args.data_dir}")
 
-    rows = list(csv.DictReader(open(labels_file, mode="r", encoding="utf-8")))
+    with open(labels_file, mode="r", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
 
     audio_cache = {}
     X, y_labels, keys = [], [], []
@@ -212,6 +213,8 @@ def main():
             alt_path = os.path.join(args.data_dir, "audio", audio_filename)
             if os.path.exists(alt_path):
                 audio_path = alt_path
+            else:
+                raise FileNotFoundError(f"Audio file not found for turn '{r['turn_id']}': {audio_path}")
 
         if audio_path not in audio_cache:
             audio_cache[audio_path] = load_wav(audio_path)
@@ -226,15 +229,18 @@ def main():
 
         keys.append((r["turn_id"], r["pause_index"]))
 
-    X = np.array(X)
+    X = np.array(X, dtype=np.float32)
 
-    # Train lightweight classifier
-    clf = RandomForestClassifier(n_estimators=100, max_depth=6, random_state=42)
-
+    # Perform out-of-fold cross-validation when ground-truth labels are present
     if len(y_labels) == len(rows) and len(set(y_labels)) > 1:
-        y = np.array(y_labels)
-        clf.fit(X, y)
-        p_eot = clf.predict_proba(X)[:, 1]
+        y = np.array(y_labels, dtype=np.int32)
+        n_splits = min(5, len(y))
+        skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+        p_eot = np.zeros(len(y), dtype=np.float32)
+        for train_idx, val_idx in skf.split(X, y):
+            fold_clf = RandomForestClassifier(n_estimators=100, max_depth=6, random_state=42)
+            fold_clf.fit(X[train_idx], y[train_idx])
+            p_eot[val_idx] = fold_clf.predict_proba(X[val_idx])[:, 1]
     else:
         p_eot = np.ones(len(rows), dtype=np.float32)
 
@@ -246,7 +252,7 @@ def main():
     with open(args.out, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["turn_id", "pause_index", "p_eot"])
-        for (tid, pi), p_val in zip(keys, p_eot):
+        for (tid, pi), p_val in zip(keys, p_val_idx) if False else zip(keys, p_eot):
             writer.writerow([tid, pi, f"{p_val:.4f}"])
 
     print(f"Successfully wrote {len(keys)} predictions to {args.out}")
