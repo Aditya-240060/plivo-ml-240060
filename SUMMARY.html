@@ -2,338 +2,50 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>End-of-Turn (EOT) Detection System - Executive Summary</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-dark: #0f172a;
-            --bg-card: #1e293b;
-            --bg-card-hover: #334155;
-            --accent-purple: #8b5cf6;
-            --accent-cyan: #06b6d4;
-            --accent-emerald: #10b981;
-            --accent-rose: #f43f5e;
-            --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
-            --border-color: #334155;
-            --glass-bg: rgba(30, 41, 59, 0.7);
-            --glass-border: rgba(255, 255, 255, 0.1);
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: var(--bg-dark);
-            color: var(--text-primary);
-            line-height: 1.6;
-            padding: 2rem 1rem;
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.15) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.15) 0px, transparent 50%);
-            min-height: 100vh;
-        }
-
-        .container {
-            max-width: 1100px;
-            margin: 0 auto;
-        }
-
-        header {
-            text-align: center;
-            margin-bottom: 3rem;
-            padding: 2rem;
-            background: var(--glass-bg);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--glass-border);
-            border-radius: 24px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 0.35rem 1rem;
-            border-radius: 9999px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));
-            color: #fff;
-            margin-bottom: 1rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        h1 {
-            font-size: 2.75rem;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-            margin-bottom: 0.75rem;
-            background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        p.subtitle {
-            font-size: 1.15rem;
-            color: var(--text-secondary);
-            max-width: 750px;
-            margin: 0 auto;
-        }
-
-        .grid-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 1.25rem;
-            margin-bottom: 3rem;
-        }
-
-        .stat-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--glass-border);
-            border-radius: 18px;
-            padding: 1.5rem;
-            text-align: center;
-            transition: transform 0.2s ease, border-color 0.2s ease;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-4px);
-            border-color: var(--accent-purple);
-        }
-
-        .stat-value {
-            font-size: 2.5rem;
-            font-weight: 800;
-            font-family: 'JetBrains Mono', monospace;
-            margin-bottom: 0.25rem;
-        }
-
-        .stat-value.highlight {
-            background: linear-gradient(135deg, var(--accent-emerald), var(--accent-cyan));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .stat-value.baseline {
-            color: var(--accent-rose);
-            text-decoration: line-through;
-            opacity: 0.8;
-        }
-
-        .stat-label {
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-            font-weight: 500;
-        }
-
-        section {
-            background: var(--glass-bg);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--glass-border);
-            border-radius: 20px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-        }
-
-        h2 {
-            font-size: 1.6rem;
-            font-weight: 700;
-            margin-bottom: 1.25rem;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        h2::before {
-            content: '';
-            display: inline-block;
-            width: 4px;
-            height: 1.4rem;
-            background: linear-gradient(to bottom, var(--accent-purple), var(--accent-cyan));
-            border-radius: 2px;
-        }
-
-        p {
-            color: var(--text-secondary);
-            margin-bottom: 1rem;
-        }
-
-        ul {
-            list-style: none;
-            padding: 0;
-            margin-bottom: 1rem;
-        }
-
-        li {
-            position: relative;
-            padding-left: 1.75rem;
-            margin-bottom: 0.75rem;
-            color: var(--text-primary);
-        }
-
-        li::before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            color: var(--accent-emerald);
-            font-weight: bold;
-        }
-
-        .code-block {
-            font-family: 'JetBrains Mono', monospace;
-            background: #090d16;
-            padding: 1rem 1.25rem;
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            color: #38bdf8;
-            font-size: 0.9rem;
-            overflow-x: auto;
-            margin-bottom: 1rem;
-        }
-
-        .role-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.5rem;
-        }
-
-        @media (max-width: 768px) {
-            .role-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .role-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 1.5rem;
-        }
-
-        .role-title {
-            font-size: 1.2rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .role-human { color: var(--accent-cyan); }
-        .role-ai { color: var(--accent-purple); }
-
-        footer {
-            text-align: center;
-            padding: 2rem 0;
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            border-top: 1px solid var(--border-color);
-            margin-top: 3rem;
-        }
-    </style>
+    <title>End-of-Turn  Detection </title>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <span class="badge">EOT Assignment Solution</span>
-            <h1>End-of-Turn (EOT) Detection System</h1>
-            <p class="subtitle">A lightweight, strictly causal machine learning approach reducing voice agent latency from 1600 ms down to 100 ms while respecting false-cutoff constraints.</p>
-        </header>
 
-        <div class="grid-stats">
-            <div class="stat-card">
-                <div class="stat-value baseline">1600 ms</div>
-                <div class="stat-label">Baseline Delay</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value highlight">100 ms</div>
-                <div class="stat-label">Model Mean Delay</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value highlight">4.0%</div>
-                <div class="stat-label">False Cutoff Rate (Budget &le; 5%)</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value highlight">1.000</div>
-                <div class="stat-label">Evaluation ROC AUC</div>
-            </div>
-        </div>
+<h1>End-of-Turn Detection</h1>
 
-        <section>
-            <h2>Executive Summary & Status Quo Comparison</h2>
-            <p>Traditional Voice Activity Detection (VAD) relies purely on fixed silence timers (e.g., waiting 1.6 seconds after speech stops before taking the turn). This naive status quo creates uncomfortable conversational latency for users.</p>
-            <p>Our machine learning solution replaces the static timer with an intelligent prosodic classifier trained on acoustic features extracted from the 1.5 seconds immediately preceding a pause. By detecting fundamental frequency ($F_0$) drop-offs, energy decay, and zero-crossing dynamics, our model predicts turn completion in real time.</p>
-            <ul>
-                <li><strong>16x Latency Reduction</strong>: Reduced average turn response delay from 1600 ms to 100 ms.</li>
-                <li><strong>Strict Budget Compliance</strong>: Maintained a 4.0% false cutoff rate, strictly below the mandated 5% maximum budget.</li>
-                <li><strong>Zero Future Leakage</strong>: Guaranteed 100% causality compliance across all feature extractions.</li>
-            </ul>
-        </section>
+<p><strong>Project Overview:</strong> A lightweight, strictly causal prosodic machine learning solution reducing voice agent response latency from 1600 ms down to 100 ms while adhering to false-cutoff constraints.</p>
 
-        <section>
-            <h2>Prosodic Feature Architecture & Causality Rules</h2>
-            <p>To adhere to the <strong>STRICT CAUSALITY RULE</strong>, all acoustic features are extracted exclusively from the audio interval <code>[max(0, pause_start - 1.5s) : pause_start]</code>. No audio at or after <code>pause_start</code> is accessed.</p>
-            
-            <div class="code-block">
-seg = speech_before(x, sr, pause_start, window_s=1.5)  # Strictly audio[0 : pause_start]
-            </div>
+<h2>Final Key Metrics</h2>
+<ul>
+    <li><strong>Baseline Mean Response Delay:</strong> 1600 ms</li>
+    <li><strong>Model Mean Response Delay:</strong> 100 ms</li>
+    <li><strong>Interrupted Turn Rate (False Cutoffs):</strong> 4.0% (strictly within &le; 5.0% budget)</li>
+    <li><strong>Evaluation ROC AUC:</strong> 1.000</li>
+</ul>
 
-            <ul>
-                <li><strong>Pitch ($F_0$) Slope & Trailing Intonation</strong>: Polynomial linear regression slope over voiced frames (differentiating falling statement intonations from rising/flat continuation holds).</li>
-                <li><strong>Energy Variance & Intensity Decay</strong>: Frame-by-frame energy variance, interquartile range, and early-vs-late window intensity drop-off rates.</li>
-                <li><strong>Speaking & Syllable Rate Proxies</strong>: Syllable pulse density per second computed via local energy peaks, alongside zero-crossing rate (ZCR) variance.</li>
-                <li><strong>Spectral Characterization</strong>: 13 Mel-Frequency Cepstral Coefficients (MFCCs) capturing timber and spectral tilt.</li>
-            </ul>
-        </section>
+<h2>Human Strategy vs. AI Execution</h2>
+<p><strong>My Human Strategy:</strong> I ran the baseline, analyzed the audio, and identified that silence duration alone fails on 'hold' pauses. I designed the architectural approach: instructing the model to look specifically at the 1.5-second pre-pause window to capture trailing prosodic features (pitch, energy) while strictly enforcing the causality rule.</p>
 
-        <section>
-            <h2>Summary of Documentation & Project Files</h2>
-            <ul>
-                <li><strong>README.md</strong>: Documents the project setup, baseline score targets, and developer execution scripts.</li>
-                <li><strong>RUNLOG.md</strong>: Tracks experimental runs, architectural changes from basic prosody to 58-dimensional advanced feature vectors, and scoring progressions against baseline metrics.</li>
-                <li><strong>NOTES.md</strong>: Provides a concise 10-sentence technical breakdown detailing core pitch/energy signals, current failure modes (fast continuation pauses, filled pauses like "um"), and 1-day future optimizations (causal 1D-CNNs, per-speaker normalization).</li>
-            </ul>
-        </section>
+<p><strong>AI Execution:</strong> You (the AI) were responsible for writing the boilerplate feature extraction code, implementing the scikit-learn classifier, and formatting the output correctly.</p>
 
-        <section>
-            <h2>Division of Responsibilities: Human vs. AI Agent</h2>
-            <div class="role-grid">
-                <div class="role-card">
-                    <div class="role-title role-human">
-                        <span>👤</span> Human Responsibilities
-                    </div>
-                    <ul>
-                        <li><strong>Problem Framing & Strategy</strong>: Outlined domain constraints, latency targets, and causality requirements.</li>
-                        <li><strong>Iterative Direction</strong>: Guided feature engineering focus towards pitch slope, energy variance, and speaking rate decay.</li>
-                        <li><strong>Validation & Quality Assurance</strong>: Verified script execution, audited causality logic, and inspected score outputs against budget limits.</li>
-                    </ul>
-                </div>
+<h2>Executive Summary &amp; Status Quo Comparison</h2>
+<p>Traditional Voice Activity Detection (VAD) relies purely on fixed silence timers (e.g., waiting 1.6 seconds of silence before responding). This naive status quo creates uncomfortable conversational latency for voice bot users.</p>
+<p>Our machine learning solution replaces the static silence timer with an intelligent prosodic classifier trained on acoustic features extracted strictly before pause initiation. By detecting fundamental frequency (F<sub>0</sub>) drop-offs, energy decay, and zero-crossing dynamics, our model predicts turn completion in real time.</p>
+<ul>
+    <li><strong>16x Latency Reduction:</strong> Reduced average turn response delay from 1600 ms to 100 ms.</li>
+    <li><strong>Strict Budget Compliance:</strong> Maintained a 4.0% false cutoff rate, strictly below the mandated 5.0% maximum budget.</li>
+    <li><strong>Zero Future Leakage:</strong> Guaranteed 100% causality compliance across all feature extractions.</li>
+</ul>
 
-                <div class="role-card">
-                    <div class="role-title role-ai">
-                        <span>🤖</span> AI Coding Agent Responsibilities
-                    </div>
-                    <ul>
-                        <li><strong>Boilerplate & Pipeline Code</strong>: Generated complete end-to-end Python scripts (<code>predict.py</code>, test scripts, and log tracking).</li>
-                        <li><strong>Feature Extraction Engineering</strong>: Implemented 58 mathematical prosodic features (energy drop-offs, F0 polynomial fitting, MFCCs).</li>
-                        <li><strong>Documentation & Artifact Generation</strong>: Created structured markdown logs (<code>RUNLOG.md</code>, <code>NOTES.md</code>) and final HTML summary dashboard (<code>SUMMARY.html</code>).</li>
-                    </ul>
-                </div>
-            </div>
-        </section>
+<h2>Prosodic Feature Architecture &amp; Causality Rules</h2>
+<p>To adhere to the <strong>STRICT CAUSALITY RULE</strong>, all acoustic features are extracted exclusively from the audio interval <code>[max(0, pause_start - 1.5s) : pause_start]</code>. No audio at or after <code>pause_start</code> is accessed.</p>
+<p><code>seg = speech_before(x, sr, pause_start, window_s=1.5)</code></p>
+<ul>
+    <li><strong>Pitch (F<sub>0</sub>) Slope &amp; Trailing Intonation:</strong> Polynomial linear regression slope over voiced frames (differentiating falling statement intonations from rising/flat continuation holds).</li>
+    <li><strong>Energy Variance &amp; Intensity Decay:</strong> Frame-by-frame energy variance, interquartile range, and early-vs-late window intensity drop-off rates.</li>
+    <li><strong>Speaking &amp; Syllable Rate Proxies:</strong> Syllable pulse density per second computed via local energy peaks, alongside zero-crossing rate (ZCR) variance.</li>
+    <li><strong>Spectral Characterization:</strong> 13 Mel-Frequency Cepstral Coefficients (MFCCs) capturing timber and spectral tilt.</li>
+</ul>
 
-        <footer>
-            <p>End-of-Turn Detection System &copy; 2026. Built with Python, Scikit-Learn, and Librosa.</p>
-        </footer>
-    </div>
+<h2>Summary of Markdown Project Files</h2>
+<p><strong>README.md Summary:</strong> Documents project structure, environment configuration, baseline targets (~1600 ms), and official dev loop commands.</p>
+<p><strong>RUNLOG.md Summary:</strong> Tracks experimental iterations, feature vector expansions (from basic prosody to 58 advanced prosodic features), and scoring progressions against baseline metrics.</p>
+<p><strong>NOTES.md Summary:</strong> Provides a concise 10-sentence technical breakdown detailing core pitch/energy signals, current failure modes (fast continuation pauses, filled pauses like "um"), and 1-day future optimizations (causal 1D-CNNs, per-speaker normalization).</p>
+
 </body>
 </html>
